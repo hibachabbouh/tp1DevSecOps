@@ -1,9 +1,11 @@
+import ast
 import hashlib
 import sqlite3
 import subprocess
 
 import yaml
 from flask import Flask, request
+from markupsafe import escape
 
 app = Flask(__name__)
 
@@ -29,24 +31,22 @@ def index():
 @app.route("/user")
 def get_user():
     name = request.args.get("name", "")
-    # VULN 2 : injection SQL (Bandit B608)
-    query = "SELECT * FROM users WHERE name = '" + name + "'"
-    rows = get_db().execute(query).fetchall()
+    rows = get_db().execute(
+        "SELECT * FROM users WHERE name = ?", (name,)
+    ).fetchall()
     return str(rows)
 
 
 @app.route("/hello")
 def hello():
     name = request.args.get("name", "")
-    # VULN 3 : XSS reflechi (entree utilisateur renvoyee en HTML brut)
-    return "<h1>Bonjour " + name + "</h1>"
+    return "<h1>Bonjour " + str(escape(name)) + "</h1>"
 
 
 @app.route("/calc")
 def calc():
     expr = request.args.get("expr", "1+1")
-    # VULN 4 : eval sur entree utilisateur (Bandit B307)
-    return str(eval(expr))
+    return str(ast.literal_eval(expr))
 
 
 @app.route("/ping")
@@ -66,8 +66,7 @@ def hash_password():
 
 @app.route("/config", methods=["POST"])
 def load_config():
-    # VULN 7 : deserialisation YAML non sure (Bandit B506)
-    data = yaml.load(request.data, Loader=yaml.Loader)
+    data = yaml.safe_load(request.data)
     return str(data)
 
 
